@@ -1,0 +1,417 @@
+---
+title: "Benchmarking Your Code"
+format: html
+editor: visual
+---
+
+## Setup
+
+```{r}
+#| label: package installation
+
+if (!("bench" %in% installed.packages()[,"Package"])) install.packages("bench")
+if (!("ggplot2" %in% installed.packages()[,"Package"])) install.packages("ggplot2")
+if (!("tidyr" %in% installed.packages()[,"Package"])) install.packages("tidyr")
+if (!("ggbeeswarm" %in% installed.packages()[,"Package"])) install.packages("ggbeeswarm")
+if (!("ggridges" %in% installed.packages()[,"Package"])) install.packages("ggridges")
+```
+
+In this workshop, we are going to teach you about performing benchmarks with `bench` package.
+
+## What is a Benchmark?
+
+In programming, you may want to optimize your code so that it runs as fast and efficiently as possible. If you have a code that takes too long, you may want to identify the bottlenecks and make an improvement. You might also want to compare different implementations of the same task to decide which code runs more quickly and efficiently. We can perform benchmarks to test the performance of pieces of code written for specific tasks to track execution time and memory usage.
+
+Microbenchmarks are benchmarks for very small pieces of code that can take a very short time (in the order of milliseconds or even nanoseconds).
+
+A piece of code that can be evaluated to return a new value is also called an expression. If you are writing a piece of code or a function that will be used repeatedly many times, whether it be running a simulation or a function that is applied across all columns in data frames, it may be worthwhile to invest some time optimizing the code.
+
+We will first go over a function in base R that we can use to time an expression. Then we will introduce a package called `bench`, which provides a suite of tools and visualization methods that facilitates the benchmarking process.
+
+## Timing Your Code
+
+Base R provides you with a basic function to time your code with `system.time()`.
+
+For example, let's see how long it takes to calculate the square root of 1000 numbers with `sqrt()`. We will create a vector before timing since we are only interested in the the performance of the function and not in the creation of the data vector.
+
+We create a random vector using a function `runif()`, which generates random numbers within a given range.
+
+```{r}
+#| label: system.time sqrt
+
+# generate 1000 random numbers between 10 and 100
+x <- runif(n = 1000, min = 10, max = 100)
+
+# timing sqrt function with the random vector
+system.time(sqrt(x))
+```
+
+The function gives 3 different outputs, but `elapsed` would be what you might need in most cases. This is the actual time that you, as a user, waited for the expression to finish running, as if you were holding a stopwatch in person.
+
+In this case, the expression was so fast that the function was not able to register the time it took to run.
+
+If you want to time an expression that spans multiple lines of code, you can enclose the expression in curly braces inside `system.time`. Here, I am measuring the time it takes to run bootstrap for estimating variance of the sample mean.
+
+```{r}
+#| label: system.time bootstrapping
+
+x <- runif(n = 1e5, min = 10, max = 100)
+
+# time bootstrap for estimating variance of the sample mean
+system.time({
+  # vector to save sample means
+  sampled_means <- numeric(100)
+  for (i in 1:length(sampled_means)) {
+    # get sample mean of the bootstrap sample
+    sampled_means[i] <- mean(sample(x,replace = TRUE))
+  }
+  # calculate variance of the sample mean
+  var(sampled_means)
+})
+```
+
+`system.time()` runs the expression only once, so if you would like to get a quick feel for how long your code takes to run for a process that takes a noticeable length of time, this can be a quick solution.
+
+The elapsed time depends on how fast your computer is, which is based on components like the CPU. Therefore, the elapsed time may be different across computers.
+
+### Exercise 1: Using `system.time()`
+
+Oftentimes in statistical modelling you will encounter matrix multiplication and taking inverse of a matrix. For example, you need to solve a system of linear equations for linear regression and Principal Component Analysis, which requires matrix inversion.
+
+In this exercise, let's see how long it takes to take the inverse of 3 matrices of different shapes: 500 x 500, 1000 x 1000, and 2000 x 2000.
+
+Here, I have provided you with three matrices `X1`, `X2`, and `X3`. Use `system.time()` to estimate how long it takes to solve the inverse for each of these matrices!
+
+HINT: Inverse of a matrix can be solved using `solve()` function! e.g. `solve(X)`. I would suggest checking if your code runs on the smallest case because it may take a while to run the larger ones!
+
+```{r}
+#| label: ex1
+set.seed(100)
+
+X1 <- matrix(rnorm(500^2, mean = 0, sd = 5), nrow = 500)
+X2 <- matrix(rnorm(1000^2, mean = 0, sd = 5), nrow = 1000)
+X3 <- matrix(rnorm(2000^2, mean = 0, sd = 5), nrow = 2000)
+```
+
+```{r}
+#| label: ex1 solution
+
+# write your answer here
+
+```
+
+If you repeatedly run `system.time()`, you might notice that the timing changes slightly. The time it takes is not deterministic; several factors can change how long it takes to run (i.e. what's concurrently running on your laptop). So, you might want to time the code multiple times and then summarize the result. Another point of interest may be in testing out different implementations and directly comparing the results afterwards.
+
+The `bench` package provides you with tools to do that.
+
+## Timing Your Code with `bench` package
+
+```{r}
+#| label: load bench
+
+library(bench)
+```
+
+We can use `mark()` function to benchmark our code. Let's benchmark a simple square root function, `sqrt()`.
+
+```{r}
+#| label: test sqrt
+
+# create a vector to test sqrt() on
+x <- runif(n = 1000, min = 10, max = 100)
+
+# benchmarking
+sqrt_benchmark <- mark(sqrt(x))
+print(sqrt_benchmark)
+```
+
+This returns a `tibble` with a lot of information. (`tibble` is a version of a data frame in the `tidyverse` framework)
+
+The `µs` symbol represents a microsecond, which is one millionth of a second!
+
+We can see that not only does it report the time it takes to run, but also memory allocated by R while running the expression. Memory is also an important aspect when it comes to measuring performance, but it will not be covered in detail in this workshop. More resources on profiling memory usage is provided at the end of this document.
+
+By default, `mark()` runs each expression at least once and tries to run 10000 times. However, if it takes long enough that it exceeds 0.5 seconds, it quits before hitting the limit. This behavior is controlled by arguments `max_iterations=` and `min_time=`, respectively.
+
+The number of times that the expression ran is recorded in `n_itr` column. (Actually, it is the sum of `n_itr` column and `n_gc` column, which we will go over later)
+
+The following code shows how we can explicitly control the length of time and the number of times the expression runs.
+
+```{r}
+#| label: control time and number of iterations
+
+sqrt_benchmark <- mark(sqrt(x), min_time = 0.5, max_iterations = 100)
+print(sqrt_benchmark)
+```
+
+## Comparing Performances
+
+You can provide several expressions so that it benchmarks all the expressions at once. This also returns a `tibble` object with each row representing the outcome of each expression. This time, let's increase the length of vector we are testing, and compare the performance of built in `sqrt()` function to manual implementation.
+
+You can choose to pass each expression as named or unnamed argument.
+
+```{r}
+#| label: test sqrt built-in vs custom
+
+x <- runif(1e5, min = 10, max = 100)
+mark(
+  # you can name the expression you are testing, which will show in the output
+  sqrt_builtin = sqrt(x),
+  sqrt_custom = x^0.5,
+  min_time = 1
+)
+```
+
+One neat feature: To ensure that the expressions are being benchmarked for the same thing and they are equivalent, `mark()` also tests that the output of each expression are equivalent.
+
+Let's compare the two expressions that don't have the same output. I will introduce a but in the `sqrt_custom` expression that does not correctly evaluate to square root of the numbers.
+
+```{r}
+#| label: mark tests for equivalent result
+#| error: true
+
+mark(
+  sqrt_builtin = sqrt(x),
+  sqrt_custom = x^1/2, # evaluates to (x^1)/2, and this bug will be caught by mark()
+  min_time = 1
+)
+```
+
+### Exercise 2: Timing `mean()`
+
+Below I have defined a custom implementation of the `mean()` function and the vector to test it on.
+
+```{r}
+#| label: ex2
+
+x <- runif(1e5, min = 10, max = 100)
+mean_custom <- function(x) {
+  sum(x) / length(x)
+}
+```
+
+I'd like to see how this compares to the built in `mean()`. Use `mark()` and vector `x` to compare the built in mean function to my implementation, `mean_custom()`.
+
+Limit length of time it takes to run each expression to 2 seconds or up to 5000 times
+
+Is the result what you expected?
+
+```{r}
+#| label: ex2 solution
+
+# write your answer here
+
+```
+
+## Plotting Benchmark Results
+
+Another great feature of this package is that you can easily visualize and compare the results with plots based on `ggplot2`. Pass the benchmark result to `plot()`, and you can visualize the result in several different formats, which can be controlled with `type=` argument. Possible arguments include: `beeswarm`, `jitter`, `ridge`, `boxplot`, `violin`.
+
+**NOTE:** Some arguments require you to install extra packages. The plot may error if you don't have certain packages installed. The code below shows how to install the packages for those arguments
+
+-   for `type="beeswarm"`, install `ggbeeswarm` by running `install.packages("ggbeeswarm")`
+-   for `type="ridge"`, install `ggbeeswarm` by running `install.packages("ggridges")`
+
+```{r}
+#| label: plot sqrt benchmark output
+
+x <- runif(1e5, min = 10, max = 100)
+sqrt_benchmark_results <- mark(
+  sqrt_builtin = sqrt(x),
+  sqrt_custom = x^0.5,
+  min_time = 1
+)
+
+plot(sqrt_benchmark_results)
+```
+
+`gc` stands for garbage collection, which is a process for freeing up memory space that is no longer used by R. Garbage collection will sometimes take place when the expression runs during the benchmark, impacting the performance.
+
+The summaries provided in the benchmark result will ignore any iteration that performs garbage collection. Therefore, the number in the `n_itr` column from the output is actually after removing iterations with garbage collection.
+
+Using the plot above as an example, any point that is not red is ignored in the summary output.
+
+Garbage collection is a non trivial topic in computer science. More resources on garbage collection will be provided at the end of this workshop.
+
+### Exercise 3: Updating Vectors
+
+In simulations such as bootstrap, we can obtain simulated values through iteration. Prior to running simulation, it is often a good practice to pre-allocate the space for a vector that stores the result. The vector is then updated during simulation. Another approach doesn't pre-allocating the space; we often encounter code in which the results are appended at every iteration. Let's compare the performance of the two approaches.
+
+I have defined the functions `preallocate_method()` and `append_method()` below. Compare the performance of two methods when updating a vector of length 100. Also, create a plot of the result.
+
+```{r}
+#| label: ex3
+
+# preallocate a vector of length n, and update the vector
+preallocate_method <- function(n) {
+  x <- numeric(n)
+  for (i in 1:n) {
+    x[i] <- i
+  }
+  return(x)
+}
+
+# update the vector by appending values from 1 to n
+append_method <- function(n) {
+  x <- c()
+  for (i in 1:n) {
+    x <- c(x, i)
+  }
+  return(x)
+}
+```
+
+You can try increasing the number to 1000. You'll see how quickly the performance diminishes with the append method!
+
+```{r}
+#| label: ex3 solution
+
+# write your answer here
+
+```
+
+When you are growing your vector in the append manner in R, R repeatedly copies all the elements in the vector at every iteration, searches and allocates a space to store the new vector. This involves a lot of redundant steps and negatively impacts the performance.
+
+## Benchmarking Across Different Scenarios
+
+Instead of benchmarking on a vector or data frame at a fixed size, we may want to check how the performance scales with increasing length and size. With `press()`, we can easily specify a grid of parameters to benchmark at various sizes.
+
+There are two parts to `press()`:
+
+1.  Grid of parameters as *named arguments*
+2.  An expression enclosed in curly brackets to run the benchmark as an *unnamed argument*
+
+This will use all combinations of parameters specified in `1` to run the expression in `2`.
+
+Let's continue with our previous example and see how performance of square root transformation scales with different lengths of vector.
+
+First, we define a function that creates a numeric vector based on one argument.
+
+```{r}
+#| label: create raondom vector
+
+create_numeric_vector <- function(n) {
+  runif(n, min = 10, max = 100)
+}
+```
+
+We will provide parameter `vector_length` as an argument to `press()` to create a vector at lengths `c(1000, 10000, 100000)`. Inside the curly brackets, we will write an expression to create a vector given the parameter, and then benchmark the expression. As you can see in the code below, each value of `vector_length` will be plugged into the `create_numeric_vector()` function.
+
+```{r}
+#| label: sqrt comparison press
+
+press_results <- press(
+  # part 1: grid paramater values - notice how they are named
+  vector_length = c(1000, 10000, 100000),
+  
+  # part 2: code to run the benchmark
+  {
+    # initialize the list of numbers
+    random_vector = create_numeric_vector(vector_length)
+    # run benchmark
+    mark(
+      sqrt_builtin = sqrt(random_vector),
+      sqrt_custom = random_vector^0.5,
+      min_time = 1,
+      max_iterations = 1000
+    )
+  }
+)
+
+print(press_results)
+```
+
+Just like `bench`, you can apply `plot()` to visualize the result from `press`
+
+```{r}
+#| label: visualize-press
+
+plot(press_results)
+```
+
+### Exercise 4: Mean Comparison at Different Lengths
+
+Using `press()` and `create_random_vector()`, compare the performance of two different ways to compute the mean (`mean()` and `mean_custom()`). You can use the mean function provided below.
+
+```{r}
+#| label: Exercise 4 mean comparison
+
+create_numeric_vector <- function(n) {
+  runif(n, min = 10, max = 100)
+}
+
+# mean functions
+mean_custom <- function(x) {
+  sum(x) / length(x)
+}
+
+# write your answer here
+
+```
+
+### Challenge exercise: For loop vs apply
+
+Is apply faster than running a for loop when computing a mean for each column? Let's find out. Below, I have two functions `mean_with_for_loop()` and `mean_with_lapply()`.
+
+```{r}
+#| label: loop vs apply
+
+# calculate mean of each element in the list with for loop
+mean_with_for_loop <- function(numeric_matrix) {
+  means <- numeric(ncol(numeric_matrix))
+  
+  for (i in 1:ncol(numeric_matrix)) {
+    means[i] <- mean(numeric_matrix[,i])
+  }
+  return(means)
+}
+
+# calculate mean of each element in the list with lapply
+mean_with_apply <- function(numeric_matrix) {
+  return(apply(numeric_matrix, MARGIN = 2, mean))
+}
+```
+
+Let's test the performance of these two functions. I also want to check how number of rows and columns affect the speed. The function below, `create_matrix()`, creates a numeric matrix given two arguments `n_row` and `n_col`.
+
+```{r}
+#| label: create_list_function
+
+create_matrix <- function(n_row, n_col) {
+  matrix(rnorm(n_row*n_col, mean = 10, sd = 5), nrow = n_row, ncol = n_col)
+}
+```
+
+Try comparing the two methods using the functions above for all cases where number of rows and columns are 100 or 1000:
+
+-   nrow: 100, ncol: 100
+-   nrow: 100, ncol: 1000
+-   nrow: 1000, ncol: 100
+-   nrow: 1000, ncol: 1000
+
+```{r}
+#| label: ex 5 solution
+
+# write your answer here
+
+```
+
+## Final Remark
+
+With `bench`, you will be able to benchmark your code and test different options. While this is a great tool to know, try to keep in mind how long the piece code you're trying to optimize takes with respect to the entire program. Optimizing a small portion of your code may only provide a very slight improvement to something you're building. It's important to weigh this tradeoff and determine if the improvement is worth the time spent optimizing.
+
+![xkcd comic - efficienty](https://imgs.xkcd.com/comics/efficiency.png)
+
+## Additional Resources
+
+Another package used for microbrenchmarking is called `microbenchmark`, which you can check out [here](https://cran.r-project.org/web/packages/microbenchmark/index.html).
+
+There is another aspect other than speed that is important, which is memory. There is another great package to help you profile your memory usage. A great package for profiling your code is `profvis`. You can learn more about this [here](https://rstudio.github.io/profvis/).
+
+You can learn more about garbage collection [here](https://www.techtarget.com/searchstorage/definition/garbage-collection).
+
+An additional topic that was not covered is on computational complexity. By understanding the concept of computational complexity and applying to your code, you can get a good estimate how your code will scale with different sizes of data in terms of time and memory. [This Youtube video](https://www.youtube.com/watch?v=47GRtdHOKMg) provides a good introduction to the concept.
+
+Parallel processing is a great option to speed up your code. You can learn more about parallel processing from [this workshop](https://github.com/ritika-giri/R-workshop-intro-to-parallel-processing).
+
+If you have a project that requires a lot of computing resources, it may also be worth exploring High-Performance Computing cluster offered by [Northwestern University](https://www.it.northwestern.edu/departments/it-services-support/research/computing/quest/).
