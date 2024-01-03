@@ -20,11 +20,11 @@ In this workshop, we are going to teach you about performing benchmarks with `be
 
 ## What is a Benchmark?
 
-In programming, you may want to optimize your code so that it runs as fast and efficiently as possible. If you have a code that takes too long, you may want to identify the bottlenecks and make an improvement. You might also want to compare different implementations of the same task to decide which code runs more quickly and efficiently. We can perform benchmarks to test the performance of pieces of code written for specific tasks to track execution time and memory usage.
+In programming, you may want to optimize your code so that it runs as fast and efficiently as possible. For a code that takes too long, you might need to identify the bottleneck and make improvements. Or, you might want to compare different implementations of the same task to decide which code is better. For these tasks, you would perform **benchmark** to evaluate how long a piece of code runs and how much memory it uses.
 
-Microbenchmarks are benchmarks for very small pieces of code that can take a very short time (in the order of milliseconds or even nanoseconds).
+If you are writing a piece of code or a function that will be used repeatedly many times (e.g. running a simulation, applying a function across all columns in data frames), it may be worthwhile to invest some time optimizing the code.
 
-A piece of code that can be evaluated to return a new value is also called an expression. If you are writing a piece of code or a function that will be used repeatedly many times, whether it be running a simulation or a function that is applied across all columns in data frames, it may be worthwhile to invest some time optimizing the code.
+A piece of code that can be evaluated to return a new value is also called an **expression**.
 
 We will first go over a function in base R that we can use to time an expression. Then we will introduce a package called `bench`, which provides a suite of tools and visualization methods that facilitates the benchmarking process.
 
@@ -32,7 +32,7 @@ We will first go over a function in base R that we can use to time an expression
 
 Base R provides you with a basic function to time your code with `system.time()`.
 
-For example, let's see how long it takes to calculate the square root of 1000 numbers with `sqrt()`. We will create a vector before timing since we are only interested in the the performance of the function and not in the creation of the data vector.
+For example, let's see how long it takes to calculate the square root of 1000 numbers with `sqrt()`. We will create a vector before timing since we are only interested in the performance of the function and not in the creation of the data vector.
 
 We create a random vector using a function `runif()`, which generates random numbers within a given range.
 
@@ -50,7 +50,9 @@ The function gives 3 different outputs, but `elapsed` would be what you might ne
 
 In this case, the expression was so fast that the function was not able to register the time it took to run.
 
-If you want to time an expression that spans multiple lines of code, you can enclose the expression in curly braces inside `system.time`. Here, I am measuring the time it takes to run bootstrap for estimating variance of the sample mean.
+If you want to time an expression that spans multiple lines of code, you can enclose the expression in curly braces inside `system.time()`. Here, I am measuring the time it takes to run bootstrap for estimating variance of the sample mean.
+
+**NOTE**: Bootstrap is a type of statistical procedure where you resample from the same dataset numerous times to estimate some properties of some quantity of interest.
 
 ```{r}
 #| label: system.time bootstrapping
@@ -125,11 +127,13 @@ sqrt_benchmark <- mark(sqrt(x))
 print(sqrt_benchmark)
 ```
 
-This returns a `tibble` with a lot of information. (`tibble` is a version of a data frame in the `tidyverse` framework)
+This returns a `tibble` with a lot of information. (`tibble` is a version of a data frame in the `tidyverse` framework):
+- `min`: minimum execution time
+- `median`: median execution time
 
 The `µs` symbol represents a microsecond, which is one millionth of a second!
 
-We can see that not only does it report the time it takes to run, but also memory allocated by R while running the expression. Memory is also an important aspect when it comes to measuring performance, but it will not be covered in detail in this workshop. More resources on profiling memory usage is provided at the end of this document.
+We can see that not only does it report the time it takes to run, but also memory allocated by R while running the expression, which is available under `mem_alloc` column. Memory is also an important aspect when it comes to measuring performance, but it will not be covered in detail in this workshop. More resources on profiling memory usage is provided at the end of this document.
 
 By default, `mark()` runs each expression at least once and tries to run 10000 times. However, if it takes long enough that it exceeds 0.5 seconds, it quits before hitting the limit. This behavior is controlled by arguments `max_iterations=` and `min_time=`, respectively.
 
@@ -164,7 +168,7 @@ mark(
 
 One neat feature: To ensure that the expressions are being benchmarked for the same thing and they are equivalent, `mark()` also tests that the output of each expression are equivalent.
 
-Let's compare the two expressions that don't have the same output. I will introduce a but in the `sqrt_custom` expression that does not correctly evaluate to square root of the numbers.
+Let's compare the two expressions that don't have the same output. I will introduce an error in the `sqrt_custom` expression so that it does not correctly evaluate to square root of the numbers.
 
 ```{r}
 #| label: mark tests for equivalent result
@@ -185,6 +189,7 @@ Below I have defined a custom implementation of the `mean()` function and the ve
 #| label: ex2
 
 x <- runif(1e5, min = 10, max = 100)
+
 mean_custom <- function(x) {
   sum(x) / length(x)
 }
@@ -192,7 +197,7 @@ mean_custom <- function(x) {
 
 I'd like to see how this compares to the built in `mean()`. Use `mark()` and vector `x` to compare the built in mean function to my implementation, `mean_custom()`.
 
-Limit length of time it takes to run each expression to 2 seconds or up to 5000 times
+Limit length of time it takes to run each expression to 2 seconds or up to 5000 iterations.
 
 Is the result what you expected?
 
@@ -235,9 +240,9 @@ Garbage collection is a non trivial topic in computer science. More resources on
 
 ### Exercise 3: Updating Vectors
 
-In simulations such as bootstrap, we can obtain simulated values through iteration. Prior to running simulation, it is often a good practice to pre-allocate the space for a vector that stores the result. The vector is then updated during simulation. Another approach doesn't pre-allocating the space; we often encounter code in which the results are appended at every iteration. Let's compare the performance of the two approaches.
+In simulations such as bootstrap, we can obtain simulated values through iteration. Prior to running simulation, it is often a good practice to *pre-allocate* the space for a vector that stores the result. The vector is then updated during simulation. Another approach doesn't pre-allocating the space; we often encounter code in which the results are appended to the vector at every iteration. Let's compare the performance of the two approaches.
 
-I have defined the functions `preallocate_method()` and `append_method()` below. Compare the performance of two methods when updating a vector of length 100. Also, create a plot of the result.
+I have defined the functions `preallocate_method()` and `append_method()` below. These functions will take an integer and create a vector of that length with each method. Compare the performance of two methods when updating a vector of length 100. Also, create a plot of the result.
 
 ```{r}
 #| label: ex3
@@ -288,7 +293,7 @@ Let's continue with our previous example and see how performance of square root 
 First, we define a function that creates a numeric vector based on one argument.
 
 ```{r}
-#| label: create raondom vector
+#| label: create random vector
 
 create_numeric_vector <- function(n) {
   runif(n, min = 10, max = 100)
@@ -332,6 +337,8 @@ plot(press_results)
 ### Exercise 4: Mean Comparison at Different Lengths
 
 Using `press()` and `create_random_vector()`, compare the performance of two different ways to compute the mean (`mean()` and `mean_custom()`). You can use the mean function provided below.
+
+Compare the performance when the length of vector is 100, 1000, and 10000.
 
 ```{r}
 #| label: Exercise 4 mean comparison
