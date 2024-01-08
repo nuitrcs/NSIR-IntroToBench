@@ -127,8 +127,9 @@ sqrt_benchmark <- mark(sqrt(x))
 print(sqrt_benchmark)
 ```
 
-This returns a `tibble` with a lot of information. (`tibble` is a version of a data frame in the `tidyverse` framework):
-- `min`: minimum execution time
+This returns a `tibble` with a lot of information. (`tibble` is a version of a data frame in the `tidyverse` framework): 
+
+- `min`: minimum execution time 
 - `median`: median execution time
 
 The `µs` symbol represents a microsecond, which is one millionth of a second!
@@ -358,7 +359,7 @@ mean_custom <- function(x) {
 
 ### Challenge exercise: For loop vs apply
 
-Is apply faster than running a for loop when computing a mean for each column? Let's find out. Below, I have two functions `mean_with_for_loop()` and `mean_with_lapply()`.
+Is apply faster than running a for loop when computing a mean for each column? Let's find out. Below, I have two functions `mean_with_for_loop()` and `mean_with_apply()`.
 
 ```{r}
 #| label: loop vs apply
@@ -373,7 +374,7 @@ mean_with_for_loop <- function(numeric_matrix) {
   return(means)
 }
 
-# calculate mean of each element in the list with lapply
+# calculate mean of each element in the list with apply
 mean_with_apply <- function(numeric_matrix) {
   return(apply(numeric_matrix, MARGIN = 2, mean))
 }
