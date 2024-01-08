@@ -127,10 +127,10 @@ sqrt_benchmark <- mark(sqrt(x))
 print(sqrt_benchmark)
 ```
 
-This returns a `tibble` with a lot of information. (`tibble` is a version of a data frame in the `tidyverse` framework): 
+This returns a `tibble` with a lot of information. (`tibble` is a version of a data frame in the `tidyverse` framework):
 
-- `min`: minimum execution time 
-- `median`: median execution time
+-   `min`: minimum execution time
+-   `median`: median execution time
 
 The `µs` symbol represents a microsecond, which is one millionth of a second!
 
@@ -154,6 +154,8 @@ print(sqrt_benchmark)
 You can provide several expressions so that it benchmarks all the expressions at once. This also returns a `tibble` object with each row representing the outcome of each expression. This time, let's increase the length of vector we are testing, and compare the performance of built in `sqrt()` function to manual implementation.
 
 You can choose to pass each expression as named or unnamed argument.
+
+**NOTE:** While working in an Rmarkdown / Quarto document, output from `mark()` will not display the the name of the expression you provided. To display the name, you either need to run it in console directly, or knit the document.
 
 ```{r}
 #| label: test sqrt built-in vs custom
@@ -327,7 +329,7 @@ press_results <- press(
 print(press_results)
 ```
 
-Just like `bench`, you can apply `plot()` to visualize the result from `press`
+Just like `mark()`, you can apply `plot()` to visualize the result from `press()`
 
 ```{r}
 #| label: visualize-press
