@@ -1,6 +1,6 @@
 # NSIR-IntroToBench
 
-Taught by John Lee Winter Quarter of 2024 Northwestern University's Research Computing and Data Services
+Taught by John Lee Winter Quarter of 2024 Northwestern University's Research Computing and Data Services. The workshop was taught as part of the winter 2024 [Next Steps in R series](https://github.com/nuitrcs/Next-steps-in-R).
 
 
 # Getting Started
